@@ -1,0 +1,1780 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>卷積神經網路架構與實際影像卷積視覺化</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Noto Sans TC', 'monospace'],
+          },
+          colors: {
+            obsidian: '#090d16',
+            panel: '#111827',
+            surface: '#161f30',
+            border: '#1f2937',
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap');
+    body {
+      background-color: #090d16;
+      color: #e2e8f0;
+      font-family: 'Inter', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, -apple-system, sans-serif;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'Noto Sans TC', monospace;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #090d16; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    .grid-cell {
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+      transition: transform 0.08s ease, box-shadow 0.08s ease;
+    }
+    input[type="range"] {
+      accent-color: #38bdf8;
+    }
+    .stage-highlight {
+      box-shadow: 0 0 0 2px #38bdf8, 0 0 24px rgba(56, 189, 248, 0.22);
+    }
+    /* ---------- 數學說明面板 ---------- */
+    .math-panel summary { list-style: none; cursor: pointer; }
+    .math-panel summary::-webkit-details-marker { display: none; }
+    .math-panel[open] .chev { transform: rotate(90deg); }
+    .math-card {
+      background: rgba(2, 6, 23, 0.7);
+      border: 1px solid #1e293b;
+      border-radius: 0.75rem;
+      padding: 0.9rem 1rem;
+      font-size: 12.5px;
+      line-height: 1.75;
+      color: #cbd5e1;
+    }
+    .math-card h4 {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.4rem;
+    }
+    .math-card .katex-display { margin: 0.55rem 0; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+    .math-card .katex { font-size: 1.04em; color: #e2e8f0; }
+    .math-card .note { font-size: 11.5px; color: #94a3b8; }
+    .math-card table { width: 100%; font-size: 11.5px; border-collapse: collapse; margin-top: 0.3rem; }
+    .math-card th, .math-card td { border-bottom: 1px solid #1e293b; padding: 3px 4px; text-align: center; }
+    .math-card th { color: #94a3b8; font-weight: 500; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-sky-500/30 selection:text-sky-200">
+
+  <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-sm sm:text-base font-semibold tracking-tight text-slate-100 flex items-center gap-2">
+            卷積神經網路視覺化
+            <span class="text-[10px] mono uppercase px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30">互動實驗室</span>
+          </h1>
+          <p class="text-xs text-slate-400 hidden sm:block">二維卷積、多層特徵圖與實際影像辨識流程</p>
+        </div>
+      </div>
+
+      <nav class="flex items-center bg-slate-900 p-1 rounded-lg border border-slate-800 overflow-x-auto">
+        <button id="tab-real" class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors bg-sky-500 text-slate-950 shadow-sm whitespace-nowrap">
+          1. 實際影像 CNN
+        </button>
+        <button id="tab-conv" class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-slate-300 hover:text-white whitespace-nowrap">
+          2. 卷積實驗室 (8×8)
+        </button>
+        <button id="tab-arch" class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-slate-300 hover:text-white whitespace-nowrap">
+          3. 形狀分類器 (16×16)
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-5">
+
+    <!-- ==================== 視圖 1：實際影像 CNN 流程 ==================== -->
+    <section id="view-real" class="space-y-5">
+
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+        <div id="real-dropzone" class="lg:col-span-5 border border-dashed border-slate-700 hover:border-sky-400 bg-slate-950/70 rounded-xl p-3 flex items-center justify-between gap-3 cursor-pointer transition-colors">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+            </div>
+            <div>
+              <div class="text-xs font-semibold text-slate-100">上傳任意實際影像（JPG / PNG / WebP）</div>
+              <div class="text-[11px] text-slate-400">點擊瀏覽，或將影像拖放到此處</div>
+            </div>
+          </div>
+          <span class="px-2.5 py-1 text-[11px] font-medium rounded-md bg-sky-500/15 text-sky-300 border border-sky-500/30 shrink-0">瀏覽</span>
+          <input id="real-file-input" type="file" accept="image/*" class="hidden" />
+        </div>
+
+        <div class="lg:col-span-5 flex flex-wrap items-center gap-2">
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mr-1">範例：</span>
+          <button data-real-sample="cat" class="real-sample-btn px-2.5 py-1.5 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors">貓咪肖像</button>
+          <button data-real-sample="building" class="real-sample-btn px-2.5 py-1.5 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors">建築</button>
+          <button data-real-sample="sign" class="real-sample-btn px-2.5 py-1.5 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors">八角形標誌</button>
+        </div>
+
+        <div class="lg:col-span-2 flex items-center justify-end gap-2">
+          <button id="btn-real-animate" class="w-full lg:w-auto px-3 py-1.5 text-xs font-semibold rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 transition-colors">▶ 追蹤前向傳播</button>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs mono">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <span class="text-slate-400">輸入：<strong class="text-slate-100">64×64×1</strong></span>
+          <span class="text-slate-600">→</span>
+          <span class="text-slate-400">Conv1+ReLU：<strong class="text-sky-400">62×62×6</strong></span>
+          <span class="text-slate-600">→</span>
+          <span class="text-slate-400">最大池化1：<strong class="text-sky-300">31×31×6</strong></span>
+          <span class="text-slate-600">→</span>
+          <span class="text-slate-400">Conv2+ReLU：<strong class="text-amber-400">29×29×4</strong></span>
+          <span class="text-slate-600">→</span>
+          <span class="text-slate-400">最大池化2：<strong class="text-amber-300">14×14×4</strong></span>
+          <span class="text-slate-600">→</span>
+          <span class="text-slate-400">GAP：<strong class="text-emerald-400">4 維</strong></span>
+        </div>
+        <span id="real-image-meta" class="text-[11px] text-slate-400">範例：貓咪肖像 (64×64)</span>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+
+        <div id="stage-box-0" class="lg:col-span-3 bg-slate-900/70 border border-slate-800 rounded-xl p-4 space-y-3 transition-all">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-200">階段 0：輸入與顯著性</h2>
+            <label class="flex items-center gap-1.5 text-[11px] text-sky-300 cursor-pointer">
+              <input id="chk-real-overlay" type="checkbox" checked class="rounded border-slate-700 bg-slate-950 text-sky-500" /> 熱力圖
+            </label>
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="flex flex-col items-center">
+              <canvas id="real-preview-canvas" width="144" height="144" class="w-full aspect-square rounded-lg border border-slate-700 bg-slate-950 object-cover"></canvas>
+              <span class="text-[10px] mono text-slate-400 mt-1">原圖 + 注意力</span>
+            </div>
+            <div class="flex flex-col items-center">
+              <canvas id="real-gray-canvas" width="144" height="144" class="w-full aspect-square rounded-lg border border-slate-700 bg-slate-950"></canvas>
+              <span class="text-[10px] mono text-slate-400 mt-1">64×64 張量 [0..1]</span>
+            </div>
+          </div>
+          <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-[11px] text-slate-400 space-y-1">
+            <div class="flex justify-between mono">
+              <span>疊加來源：</span>
+              <span id="real-overlay-label" class="text-amber-300">主體輪廓</span>
+            </div>
+            <p class="text-[11px] leading-relaxed text-slate-400">
+              點擊階段 1 或階段 2 的任一特徵圖，即可將其空間激活值直接投影到你的影像上。
+            </p>
+          </div>
+        </div>
+
+        <div id="stage-box-1" class="lg:col-span-3 bg-slate-900/70 border border-slate-800 rounded-xl p-4 space-y-3 transition-all">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-sky-300">階段 1：Conv1 → 池化1</h2>
+            <span class="text-[10px] mono text-slate-400">31×31×6</span>
+          </div>
+          <div id="real-conv1-grid" class="grid grid-cols-2 gap-2"></div>
+          <div id="real-kernel-inspector" class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-[11px] mono space-y-1.5">
+            <div class="flex justify-between text-slate-300">
+              <span id="real-insp-name">已選取：垂直邊緣</span>
+              <span id="real-insp-sparsity" class="text-sky-400">ReLU 激活率：—</span>
+            </div>
+            <div id="real-insp-weights" class="grid grid-cols-3 gap-1 text-center text-[10px]"></div>
+          </div>
+        </div>
+
+        <div id="stage-box-2" class="lg:col-span-3 bg-slate-900/70 border border-slate-800 rounded-xl p-4 space-y-3 transition-all">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-amber-300">階段 2：Conv2 → 池化2</h2>
+            <span class="text-[10px] mono text-slate-400">14×14×4</span>
+          </div>
+          <p class="text-[11px] text-slate-400">將階段 1 的邊緣組合成角點、曲線、紋理與輪廓。</p>
+          <div id="real-conv2-grid" class="grid grid-cols-2 gap-2.5"></div>
+          <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-[11px] text-slate-400 mono space-y-1">
+            <div class="flex justify-between"><span>感受野：</span><span class="text-amber-300">10×10 px</span></div>
+            <div class="flex justify-between"><span>壓縮：</span><span class="text-slate-200">4,096 → 784 個值</span></div>
+          </div>
+        </div>
+
+        <div id="stage-box-3" class="lg:col-span-3 bg-slate-900/70 border border-slate-800 rounded-xl p-4 space-y-3 transition-all">
+          <div class="flex items-center justify-between">
+            <h2 class="text-xs font-semibold uppercase tracking-wider text-emerald-300">階段 3：GAP → 辨識</h2>
+            <span class="text-[10px] mono text-slate-400">Softmax</span>
+          </div>
+
+          <div id="real-probs-container" class="space-y-2.5"></div>
+
+          <div class="pt-2 border-t border-slate-800 space-y-1.5 text-[11px] mono">
+            <div class="flex justify-between">
+              <span class="text-slate-400">結構類別：</span>
+              <span id="real-top-class" class="text-emerald-400 font-semibold">—</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">主要方向：</span>
+              <span id="real-dom-axis" class="text-slate-200">—</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">邊緣密度：</span>
+              <span id="real-edge-density" class="text-slate-200">—</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-400">中心集中度：</span>
+              <span id="real-center-focus" class="text-slate-200">—</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 數學原理：視圖 1 -->
+      <details class="math-panel bg-slate-900/70 border border-slate-800 rounded-xl" open>
+        <summary class="px-4 py-3 flex items-center justify-between">
+          <span class="text-sm font-semibold text-slate-100 flex items-center gap-2"><span class="chev inline-block transition-transform text-sky-400">▶</span> 數學原理：從像素到分類機率</span>
+          <span class="text-[11px] text-slate-400">點擊展開 / 收合</span>
+        </summary>
+        <div class="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+
+          <div class="math-card">
+            <h4 class="text-slate-100">① 灰階化與正規化（階段 0）</h4>
+            影像先縮放至 64×64，再以 ITU-R BT.601 亮度權重把 RGB 轉成單通道，並除以 255 正規化到 $[0,1]$：
+            $$x_{ij}=\frac{0.299\,R_{ij}+0.587\,G_{ij}+0.114\,B_{ij}}{255}$$
+            <p class="note">綠色權重最大，因為人眼對綠光最敏感。輸入張量形狀為 $64\times64\times1$，共 4,096 個數值。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-sky-300">② 第一層卷積 Conv1 + ReLU</h4>
+            對 6 個 $3\times3$ 卷積核 $K_k$（$k=1\dots6$）各做一次滑動內積：
+            $$a_k[i,j]=\mathrm{ReLU}\!\Big(\sum_{m=0}^{2}\sum_{n=0}^{2}x[i+m,\,j+n]\,K_k[m,n]\Big)$$
+            其中 $\mathrm{ReLU}(z)=\max(0,z)$。無填充、步幅 1，輸出邊長 $64-3+1=62$。例如 Sobel 垂直邊緣核：
+            $$K_x=\begin{bmatrix}-1&0&1\\-2&0&2\\-1&0&1\end{bmatrix}\approx\frac{\partial}{\partial x}$$
+            <p class="note">這六個核的權重總和 $\sum w=0$，所以在亮度均勻的區域輸出為 0，只對變化（邊緣）有反應。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-sky-300">③ 2×2 最大池化</h4>
+            每個不重疊的 $2\times2$ 區塊只保留最大值：
+            $$p[i,j]=\max_{u,v\in\{0,1\}}a[2i+u,\;2j+v]$$
+            輸出尺寸 $\lfloor H/2\rfloor$：$62\to31$、$29\to14$（奇數邊會捨棄最後一列 / 一行）。
+            <p class="note">池化帶來小幅平移不變性，並讓下一層的感受野加倍成長。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-amber-300">④ 第二層卷積 Conv2（多通道）</h4>
+            標準的多通道卷積會把 6 個輸入通道都加總：
+            $$z_k[i,j]=b_k+\sum_{c=1}^{6}\sum_{m=0}^{2}\sum_{n=0}^{2}W_{k,c}[m,n]\;p_c[i+m,\,j+n]$$
+            本程式採用簡化版：每個通道的 $3\times3$ 權重都是常數 $W_{k,c}[m,n]=w_{k,c}/9$，等同「先做 3×3 平均，再乘上通道權重」：
+            $$z_k=b_k+\sum_{c=1}^{6}w_{k,c}\cdot\overline{p_c}^{\,3\times3},\qquad a_k=\mathrm{ReLU}(z_k)$$
+            <p class="note">輸出 $31-3+1=29$。每個濾波器 6 個權重 + 1 個偏置 $b_k$（如「主體輪廓」$b=-0.50$）。負偏置相當於門檻，抑制微弱響應。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-amber-300">⑤ 感受野（Receptive Field）</h4>
+            令 $r_l$ 為第 $l$ 層一個輸出點能「看到」的輸入範圍，$j_l$ 為累積步幅：
+            $$r_l=r_{l-1}+(k_l-1)\,j_{l-1},\qquad j_l=j_{l-1}\,s_l$$
+            <table>
+              <tr><th>層</th><th>$k$</th><th>$s$</th><th>$j_l$</th><th>$r_l$</th></tr>
+              <tr><td>輸入</td><td>–</td><td>–</td><td>1</td><td>1</td></tr>
+              <tr><td>Conv1</td><td>3</td><td>1</td><td>1</td><td>3</td></tr>
+              <tr><td>池化1</td><td>2</td><td>2</td><td>2</td><td>4</td></tr>
+              <tr><td>Conv2</td><td>3</td><td>1</td><td>2</td><td>8</td></tr>
+              <tr><td>池化2</td><td>2</td><td>2</td><td>4</td><td><b>10</b></td></tr>
+            </table>
+            <p class="note">資料量由 $64^2=4096$ 壓縮為 $14^2\times4=784$，約 5.2 倍。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-emerald-300">⑥ 全域平均池化 GAP + Softmax</h4>
+            每張特徵圖平均成一個純量：
+            $$g_k=\frac{1}{HW}\sum_{i=1}^{H}\sum_{j=1}^{W}A_k[i,j]$$
+            將 logit $z_i$ 轉為機率（先減去最大值以避免指數溢位，結果不變）：
+            $$P_i=\frac{e^{\,z_i-\max_j z_j}}{\sum_{j}e^{\,z_j-\max_j z_j}},\qquad \sum_i P_i=1$$
+            <p class="note">⚠ 本示範的 logit 是手工設計的特徵組合，並非訓練所得。例如「幾何 / 建築」：</p>
+            $$z_1=3\,g^{(2)}_1+1.4\,\frac{E_{\perp}}{E_{\times}+0.2}-1.2\,E_{\mathrm{lap}}$$
+            <p class="note">$E_\perp=g^{(1)}_{\text{垂直}}+g^{(1)}_{\text{水平}}$（正交能量），$E_\times$ 為兩個斜向能量和，$E_{\mathrm{lap}}$ 為拉普拉斯能量。「中心集中度」＝主體輪廓圖中央 $8\times8$ 能量 ÷ 總能量；「邊緣密度」＝$\min(100,\,120E_{\mathrm{lap}})\%$。</p>
+          </div>
+
+        </div>
+      </details>
+    </section>
+
+    <!-- ==================== 視圖 2：卷積實驗室 ==================== -->
+    <section id="view-conv" class="hidden space-y-5">
+
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">輸入圖樣 (8×8)</label>
+            <button id="btn-clear-input" class="text-[11px] text-rose-400 hover:text-rose-300 mono">清除</button>
+          </div>
+          <select id="select-input-preset" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+            <option value="cross">十字 (+)</option>
+            <option value="box">空心方框 (□)</option>
+            <option value="vertical">垂直邊緣</option>
+            <option value="horizontal">水平邊緣</option>
+            <option value="diagonal">斜線 (/)</option>
+            <option value="digit7">數字「7」</option>
+            <option value="digit0">數字「0」</option>
+            <option value="checker">棋盤格</option>
+          </select>
+          <div class="flex items-center gap-2 pt-1">
+            <span class="text-[11px] text-slate-400">筆刷：</span>
+            <button id="brush-1" class="px-2 py-0.5 text-[11px] mono rounded border border-sky-500 bg-sky-500/20 text-sky-300">1.0</button>
+            <button id="brush-05" class="px-2 py-0.5 text-[11px] mono rounded border border-slate-700 bg-slate-950 text-slate-400">0.5</button>
+            <button id="brush-0" class="px-2 py-0.5 text-[11px] mono rounded border border-slate-700 bg-slate-950 text-slate-400">橡皮擦</button>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">卷積核預設 (3×3)</label>
+            <span id="kernel-sum-badge" class="text-[11px] mono text-slate-400">Σw = 0</span>
+          </div>
+          <select id="select-kernel-preset" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+            <option value="sobelX">Sobel X（垂直邊緣）</option>
+            <option value="sobelY">Sobel Y（水平邊緣）</option>
+            <option value="laplacian">拉普拉斯（全方向邊緣）</option>
+            <option value="sharpen">銳化</option>
+            <option value="blur">方框模糊（正規化）</option>
+            <option value="emboss">浮雕</option>
+            <option value="identity">恆等</option>
+            <option value="custom">自訂（於下方編輯）</option>
+          </select>
+          <div class="flex items-center justify-between pt-1">
+            <label class="text-[11px] text-slate-400">偏置 (b)：<span id="bias-val" class="mono text-sky-300">0.0</span></label>
+            <input id="slider-bias" type="range" min="-2" max="2" step="0.5" value="0" class="w-28 h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">超參數</label>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <span class="block text-[10px] text-slate-400 mb-1">步幅 (S)</span>
+              <select id="select-stride" class="w-full bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-xs mono text-slate-200">
+                <option value="1" selected>S = 1</option>
+                <option value="2">S = 2</option>
+                <option value="3">S = 3</option>
+              </select>
+            </div>
+            <div>
+              <span class="block text-[10px] text-slate-400 mb-1">填充 (P)</span>
+              <select id="select-padding" class="w-full bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-xs mono text-slate-200">
+                <option value="0">P = 0 (Valid)</option>
+                <option value="1" selected>P = 1 (Same)</option>
+                <option value="2">P = 2</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <span class="block text-[10px] text-slate-400 mb-1">激活函數</span>
+              <select id="select-activation" class="w-full bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-xs text-slate-200">
+                <option value="relu" selected>ReLU</option>
+                <option value="none">無（線性）</option>
+                <option value="leaky">Leaky ReLU</option>
+                <option value="sigmoid">Sigmoid</option>
+                <option value="tanh">Tanh</option>
+              </select>
+            </div>
+            <div>
+              <span class="block text-[10px] text-slate-400 mb-1">池化 (2×2)</span>
+              <select id="select-pooling" class="w-full bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-xs text-slate-200">
+                <option value="max" selected>最大池化</option>
+                <option value="avg">平均池化</option>
+                <option value="none">無</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">掃描播放</label>
+            <label class="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
+              <input id="chk-show-values" type="checkbox" checked class="rounded border-slate-700 bg-slate-950 text-sky-500" /> 顯示數值
+            </label>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button id="btn-play" class="flex-1 bg-sky-500 hover:bg-sky-400 text-slate-950 font-semibold text-xs py-1.5 px-2.5 rounded-lg transition-colors flex items-center justify-center gap-1">
+              <span id="play-icon">▶</span> <span id="play-text">播放</span>
+            </button>
+            <button id="btn-prev" title="上一步" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-1.5 px-2.5 rounded-lg mono">◀</button>
+            <button id="btn-next" title="下一步" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-1.5 px-2.5 rounded-lg mono">▶|</button>
+            <button id="btn-reset-scan" title="重設掃描" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs py-1.5 px-2 rounded-lg mono">↺</button>
+          </div>
+          <div class="flex items-center justify-between pt-1">
+            <span class="text-[11px] text-slate-400">速度：<span id="speed-val" class="mono text-slate-200">250ms</span></span>
+            <input id="slider-speed" type="range" min="60" max="800" step="20" value="250" class="w-28 h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div class="flex flex-wrap items-center gap-3 mono">
+          <span class="text-slate-400">輸入：<strong class="text-slate-100">8×8</strong></span>
+          <span class="text-slate-600">→</span>
+          <span class="text-slate-400">填充後：<strong id="dim-padded" class="text-slate-200">10×10</strong></span>
+          <span class="text-slate-600">→</span>
+          <span class="text-slate-400">特徵圖：<strong id="dim-output" class="text-sky-400">8×8</strong></span>
+          <span class="text-slate-600">→</span>
+          <span class="text-slate-400">池化後：<strong id="dim-pooled" class="text-emerald-400">4×4</strong></span>
+        </div>
+        <div id="dim-formula" class="mono text-[11px] text-slate-400">O = ⌊(8 + 2·1 − 3) / 1⌋ + 1 = 8</div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        <div class="lg:col-span-4 bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col items-center">
+          <div class="w-full flex items-center justify-between mb-3">
+            <div>
+              <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-200">1. 輸入張量</h2>
+              <p class="text-[11px] text-slate-400">點擊或拖曳格子來繪製</p>
+            </div>
+            <span class="text-[10px] mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">虛線 = 零填充</span>
+          </div>
+          <div id="input-grid-container" class="inline-grid gap-0.5 p-2 bg-slate-950 rounded-lg border border-slate-800"></div>
+        </div>
+
+        <div class="lg:col-span-4 bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col items-center space-y-4">
+          <div class="w-full flex items-center justify-between">
+            <div>
+              <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-200">2. 卷積核 (3×3)</h2>
+              <p class="text-[11px] text-slate-400">可直接編輯權重</p>
+            </div>
+            <span id="active-coord-badge" class="text-[11px] mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">輸出 [0, 0]</span>
+          </div>
+          <div id="kernel-grid-container" class="grid grid-cols-3 gap-1.5 bg-slate-950 p-2.5 rounded-lg border border-slate-800"></div>
+          <div class="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="font-semibold text-slate-300 uppercase tracking-wider">目前視窗的內積運算</span>
+              <span class="mono text-slate-400">Σ(x·w) + b</span>
+            </div>
+            <div id="math-patch-grid" class="grid grid-cols-3 gap-1 text-[10px] mono"></div>
+            <div id="math-summary" class="pt-2 border-t border-slate-800 text-xs mono space-y-1"></div>
+          </div>
+        </div>
+
+        <div class="lg:col-span-4 bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col items-center space-y-4">
+          <div class="w-full flex items-center justify-between">
+            <div>
+              <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-200">3. 輸出特徵圖</h2>
+              <p class="text-[11px] text-slate-400">點擊任一格以檢視對應視窗</p>
+            </div>
+            <div class="flex items-center gap-1.5 text-[10px] mono">
+              <span class="inline-block w-2.5 h-2.5 rounded-sm bg-rose-500"></span><span class="text-slate-400">−</span>
+              <span class="inline-block w-2.5 h-2.5 rounded-sm bg-slate-800"></span><span class="text-slate-400">0</span>
+              <span class="inline-block w-2.5 h-2.5 rounded-sm bg-sky-400"></span><span class="text-slate-400">+</span>
+            </div>
+          </div>
+          <div id="feature-grid-container" class="inline-grid gap-0.5 p-2 bg-slate-950 rounded-lg border border-slate-800"></div>
+          <div id="pooled-section" class="w-full pt-3 border-t border-slate-800 flex flex-col items-center space-y-2">
+            <div class="w-full flex items-center justify-between">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-emerald-300">4. 池化輸出 (2×2, S=2)</h3>
+              <span id="pooled-type-badge" class="text-[10px] mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">最大</span>
+            </div>
+            <div id="pooled-grid-container" class="inline-grid gap-1 p-2 bg-slate-950 rounded-lg border border-slate-800"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 數學原理：視圖 2 -->
+      <details class="math-panel bg-slate-900/70 border border-slate-800 rounded-xl" open>
+        <summary class="px-4 py-3 flex items-center justify-between">
+          <span class="text-sm font-semibold text-slate-100 flex items-center gap-2"><span class="chev inline-block transition-transform text-sky-400">▶</span> 數學原理：單層卷積的每一步</span>
+          <span class="text-[11px] text-slate-400">點擊展開 / 收合</span>
+        </summary>
+        <div class="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+
+          <div class="math-card">
+            <h4 class="text-slate-100">① 輸出尺寸公式</h4>
+            輸入邊長 $N$、卷積核 $K$、填充 $P$、步幅 $S$：
+            $$O=\left\lfloor\frac{N+2P-K}{S}\right\rfloor+1$$
+            <table>
+              <tr><th>$N$</th><th>$K$</th><th>$P$</th><th>$S$</th><th>$O$</th><th>說明</th></tr>
+              <tr><td>8</td><td>3</td><td>0</td><td>1</td><td>6</td><td>Valid</td></tr>
+              <tr><td>8</td><td>3</td><td>1</td><td>1</td><td>8</td><td>Same</td></tr>
+              <tr><td>8</td><td>3</td><td>1</td><td>2</td><td>4</td><td>降採樣</td></tr>
+              <tr><td>8</td><td>3</td><td>2</td><td>3</td><td>4</td><td>$\lfloor 9/3\rfloor+1$</td></tr>
+            </table>
+            <p class="note">「Same」填充條件：$S=1$ 時取 $P=(K-1)/2$，輸出與輸入同大小。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-sky-300">② 單一輸出點：內積 + 偏置</h4>
+            輸出座標 $(i,j)$ 對應的視窗左上角在 $(iS,\,jS)$：
+            $$z[i,j]=\sum_{m=0}^{K-1}\sum_{n=0}^{K-1}x_{\mathrm{pad}}[iS+m,\;jS+n]\;w[m,n]\;+\;b$$
+            $$y[i,j]=f\big(z[i,j]\big)$$
+            <p class="note">中間面板的 9 個小格正是 $x\cdot w$ 的逐項乘積，加總後再加上偏置 $b$、通過激活函數 $f$，就得到特徵圖上琥珀色框的值。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-sky-300">③ 互相關 vs. 真正的卷積</h4>
+            CNN 框架實作的其實是<b>互相關</b>（cross-correlation），不翻轉卷積核。訊號處理定義的卷積需將核旋轉 180°：
+            $$(x*w)[i,j]=\sum_{m,n}x[i-m,\,j-n]\,w[m,n]$$
+            <p class="note">對稱核（拉普拉斯、模糊、恆等）兩者結果相同；Sobel 這類反對稱核則差一個正負號。由於權重是學習出來的，翻不翻轉對 CNN 沒有影響。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-sky-300">④ 激活函數</h4>
+            $$\mathrm{ReLU}(z)=\max(0,z)$$
+            $$\mathrm{LeakyReLU}(z)=\begin{cases}z,&z\ge0\\0.1\,z,&z<0\end{cases}$$
+            $$\sigma(z)=\frac{1}{1+e^{-z}},\qquad \tanh(z)=\frac{e^{z}-e^{-z}}{e^{z}+e^{-z}}$$
+            <p class="note">非線性讓多層網路不會退化成單一線性變換。ReLU 會把負值歸零而產生稀疏性；Sigmoid 在 $z=0$ 時輸出 0.5，因此背景也會「亮」起來。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-emerald-300">⑤ 池化（2×2、步幅 2）</h4>
+            $$\text{最大：}\;q[i,j]=\max_{u,v\in\{0,1\}}y[2i+u,\,2j+v]$$
+            $$\text{平均：}\;q[i,j]=\frac14\sum_{u=0}^{1}\sum_{v=0}^{1}y[2i+u,\,2j+v]$$
+            <p class="note">輸出邊長 $\lfloor O/2\rfloor$。池化沒有可學習參數；反向傳播時，最大池化只把梯度傳回最大值所在的位置。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-amber-300">⑥ 權重總和 Σw 與頻域觀點</h4>
+            輸入為常數 $c$ 時，輸出 $=c\sum w+b$，因此：
+            <p class="note">• $\sum w=0$（Sobel、拉普拉斯）→ 平坦區域輸出 0，屬於<b>高通</b>／邊緣偵測<br>• $\sum w=1$（恆等、銳化、浮雕；模糊 $9\times0.11\approx1$）→ 保留平均亮度</p>
+            由卷積定理 $\mathcal{F}\{x*w\}=X\cdot W$，可直接看核的頻率響應：
+            $$W_{\mathrm{lap}}(\omega_x,\omega_y)=2\cos\omega_x+2\cos\omega_y-4$$
+            $$W_{\mathrm{blur}}=\tfrac19(1+2\cos\omega_x)(1+2\cos\omega_y)$$
+            <p class="note">拉普拉斯在直流 $(0,0)$ 為 0、在奈奎斯特頻率 $(\pi,\pi)$ 達 $-8$ → 高通；方框模糊在直流為 1 → 低通。</p>
+          </div>
+
+        </div>
+      </details>
+    </section>
+
+    <!-- ==================== 視圖 3：多層形狀分類器 (16x16) ==================== -->
+    <section id="view-arch" class="hidden space-y-5">
+
+      <div class="bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-100">兩層 CNN 形狀分類器（16×16 → Conv1 → 池化1 → Conv2 → GAP → Softmax）</h2>
+          <p class="text-xs text-slate-400 mt-0.5">在 16×16 畫板上繪製形狀或選擇預設，即時觀察階層式特徵圖與各類別機率。</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button data-shape="circle" class="shape-preset-btn px-2.5 py-1 text-xs rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">圓形 ○</button>
+          <button data-shape="square" class="shape-preset-btn px-2.5 py-1 text-xs rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">方形 □</button>
+          <button data-shape="cross" class="shape-preset-btn px-2.5 py-1 text-xs rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">十字 +</button>
+          <button data-shape="diag" class="shape-preset-btn px-2.5 py-1 text-xs rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">斜線 /</button>
+          <button id="btn-arch-clear" class="px-2.5 py-1 text-xs rounded-md bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30">清除</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+
+        <div class="lg:col-span-3 bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col items-center justify-between">
+          <div class="w-full mb-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold uppercase tracking-wider text-slate-200">輸入 (16×16×1)</span>
+              <span class="text-[10px] mono text-sky-400">256 像素</span>
+            </div>
+            <p class="text-[11px] text-slate-400">直接用滑鼠／觸控繪製</p>
+          </div>
+          <canvas id="arch-draw-canvas" width="224" height="224" class="rounded-lg border border-slate-700 bg-slate-950 cursor-crosshair touch-none max-w-full"></canvas>
+          <div class="w-full mt-3 pt-2 border-t border-slate-800 flex justify-between text-[11px] mono text-slate-400">
+            <span>感受野：1×1</span>
+            <span>參數：0</span>
+          </div>
+        </div>
+
+        <div class="lg:col-span-3 bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-semibold uppercase tracking-wider text-sky-300">Conv1 + ReLU → 池化1</span>
+              <span class="text-[10px] mono text-slate-400">7×7×4</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mb-3">4 個方向性邊緣濾波器（3×3、S=1、P=0）+ 2×2 最大池化</p>
+            <div id="arch-conv1-maps" class="grid grid-cols-2 gap-3"></div>
+          </div>
+          <div class="w-full mt-3 pt-2 border-t border-slate-800 flex justify-between text-[11px] mono text-slate-400">
+            <span>濾波器：4 × (3×3)</span>
+            <span>參數：40</span>
+          </div>
+        </div>
+
+        <div class="lg:col-span-3 bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-semibold uppercase tracking-wider text-amber-300">Conv2 + ReLU</span>
+              <span class="text-[10px] mono text-slate-400">5×5×4</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mb-3">4 個組合式偵測器（角點、環形、交叉、斜筆劃）</p>
+            <div id="arch-conv2-maps" class="grid grid-cols-2 gap-3"></div>
+          </div>
+          <div class="w-full mt-3 pt-2 border-t border-slate-800 flex justify-between text-[11px] mono text-slate-400">
+            <span>濾波器：4 × (3×3×4)</span>
+            <span>參數：148</span>
+          </div>
+        </div>
+
+        <div class="lg:col-span-3 bg-slate-900/70 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-semibold uppercase tracking-wider text-emerald-300">GAP → 全連接 Softmax</span>
+              <span class="text-[10px] mono text-slate-400">4 → 4</span>
+            </div>
+            <p class="text-[11px] text-slate-400 mb-3">各類別預測信心度</p>
+            <div id="arch-probs-container" class="space-y-3 mt-2"></div>
+          </div>
+          <div class="w-full mt-4 pt-2 border-t border-slate-800 space-y-1">
+            <div class="flex justify-between text-[11px] mono text-slate-400">
+              <span>預測結果：</span>
+              <span id="arch-top-pred" class="text-emerald-400 font-semibold">—</span>
+            </div>
+            <div class="flex justify-between text-[11px] mono text-slate-400">
+              <span>網路總參數量：</span>
+              <span class="text-slate-200">208</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 數學原理：視圖 3 -->
+      <details class="math-panel bg-slate-900/70 border border-slate-800 rounded-xl" open>
+        <summary class="px-4 py-3 flex items-center justify-between">
+          <span class="text-sm font-semibold text-slate-100 flex items-center gap-2"><span class="chev inline-block transition-transform text-sky-400">▶</span> 數學原理：尺寸、參數量與分類</span>
+          <span class="text-[11px] text-slate-400">點擊展開 / 收合</span>
+        </summary>
+        <div class="px-4 pb-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+
+          <div class="math-card">
+            <h4 class="text-slate-100">① 張量尺寸流</h4>
+            $$16\xrightarrow{\text{Conv }3\times3}14\xrightarrow{\text{池化 }2\times2}7\xrightarrow{\text{Conv }3\times3}5\xrightarrow{\text{GAP}}1$$
+            每一步都套用 $O=\lfloor (N+2P-K)/S\rfloor+1$：
+            <p class="note">Conv1：$(16-3)/1+1=14$　池化：$14/2=7$　Conv2：$(7-3)/1+1=5$</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-sky-300">② 參數量計算</h4>
+            卷積層參數 $=C_{\text{out}}\times(K\cdot K\cdot C_{\text{in}}+1)$，「+1」為偏置：
+            $$\text{Conv1}:\;4\times(3\cdot3\cdot1+1)=40$$
+            $$\text{Conv2}:\;4\times(3\cdot3\cdot4+1)=148$$
+            $$\text{Dense}:\;4\times4+4=20$$
+            $$\text{總計}=40+148+20=208$$
+            <p class="note">權重共享讓參數量與影像大小無關；同樣把 256 像素全連接到 4 個神經元就要 $256\times4+4=1028$ 個參數。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-amber-300">③ Conv2 的運算（本程式簡化版）</h4>
+            第 $k$ 個偵測器對 4 個輸入通道 $p_c$ 做 3×3 平均後加權：
+            $$z_k[i,j]=b_k+\sum_{c=1}^{4}3\,w_{k,c}\cdot\frac19\sum_{m=0}^{2}\sum_{n=0}^{2}p_c[i+m,\,j+n]$$
+            $$a_k=\mathrm{ReLU}(z_k)$$
+            <p class="note">例如「方框角點」$w=(1.0,\,1.0,\,-0.5,\,-0.5)$、$b=-2.0$：垂直＋水平邊緣同時出現時才會激活，斜向邊緣則抑制它。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-emerald-300">④ 全域平均池化</h4>
+            $$g_k=\frac{1}{25}\sum_{i=0}^{4}\sum_{j=0}^{4}a_k[i,j],\qquad k=1,\dots,4$$
+            <p class="note">GAP 把空間資訊壓成一個數字，代表「這個特徵在整張圖出現了多少」，同時讓模型對物體位置不敏感。</p>
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-emerald-300">⑤ Logit 與 Softmax</h4>
+            本示範的分類層是手工設計（非訓練），例如：
+            $$z_{\text{圓}}=1.4\,g_1+2.2\,\frac{E_\times}{E_\perp+1}-0.4\,E_c$$
+            $$z_{\text{十字}}=1.3\,g_3+1.4\,E_c-0.5\,g_4$$
+            <p class="note">$E_\perp$、$E_\times$ 為池化1 中正交與斜向邊緣圖的總和；$E_c$ 為中心點 $(3,3)$ 的垂直＋水平響應。輸入像素總和 $\le2$ 時 logit 全為 0，Softmax 給出均勻的 25%。</p>
+            $$P_i=\frac{e^{z_i}}{\sum_{j=1}^{4}e^{z_j}}$$
+          </div>
+
+          <div class="math-card">
+            <h4 class="text-rose-300">⑥ 若要真正訓練：交叉熵與梯度</h4>
+            對正確類別 $y$，損失函數為
+            $$L=-\log P_y$$
+            Softmax 與交叉熵合併後，對 logit 的梯度非常簡潔：
+            $$\frac{\partial L}{\partial z_i}=P_i-\mathbb{1}[i=y]$$
+            再經連鎖律反向傳播，卷積核梯度同樣是一次互相關：
+            $$\frac{\partial L}{\partial w[m,n]}=\sum_{i,j}\frac{\partial L}{\partial z[i,j]}\,x[i+m,\,j+n]$$
+            <p class="note">更新規則（梯度下降）：$w\leftarrow w-\eta\,\partial L/\partial w$，$\eta$ 為學習率。</p>
+          </div>
+
+        </div>
+      </details>
+    </section>
+
+  </main>
+
+  <script>
+    // =========================================================================
+    // 1. 實際影像 CNN 流程 (64x64 -> Conv1 -> 池化1 -> Conv2 -> 池化2 -> GAP)
+    // =========================================================================
+    const REAL_SIZE = 64;
+
+    const REAL_CONV1_FILTERS = [
+      { name: '垂直邊緣',   w: [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]] },
+      { name: '水平邊緣', w: [[-1, -2, -1], [0, 0, 0], [1, 2, 1]] },
+      { name: '45° 斜邊',    w: [[-1, -1, 2], [-1, 2, -1], [2, -1, -1]] },
+      { name: '135° 斜邊',   w: [[2, -1, -1], [-1, 2, -1], [-1, -1, 2]] },
+      { name: '拉普拉斯',       w: [[0, 1, 0], [1, -4, 1], [0, 1, 0]] },
+      { name: '斑點對比',   w: [[-1, -1, -1], [-1, 8, -1], [-1, -1, -1]] },
+    ];
+
+    const REAL_CONV2_FILTERS = [
+      { name: '角點 / 格線',      weights: [0.9, 0.9, -0.3, -0.3, 0.4, 0.1], bias: -0.45 },
+      { name: '曲線輪廓',     weights: [0.3, 0.3, 0.85, 0.85, 0.2, 0.1], bias: -0.40 },
+      { name: '細緻紋理',        weights: [0.2, 0.2, 0.3, 0.3, 1.3, 0.7],   bias: -0.35 },
+      { name: '主體輪廓', weights: [0.6, 0.6, 0.4, 0.4, 0.3, 0.9],   bias: -0.50 },
+    ];
+
+    const realState = {
+      sourceCanvas: document.createElement('canvas'),
+      grayTensor: null,
+      conv1Maps: [],
+      pool1Maps: [],
+      conv2Maps: [],
+      pool2Maps: [],
+      selectedStage: 2,
+      selectedIdx: 3,
+      showOverlay: true,
+      metaLabel: '範例：貓咪肖像 (64×64)',
+      animTimer: null
+    };
+    realState.sourceCanvas.width = 256;
+    realState.sourceCanvas.height = 256;
+
+    function generateRealSample(type) {
+      const c = realState.sourceCanvas;
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, 256, 256);
+
+      if (type === 'cat') {
+        realState.metaLabel = '範例：貓咪肖像 (64×64)';
+        const bg = ctx.createRadialGradient(128, 128, 20, 128, 128, 160);
+        bg.addColorStop(0, '#334155');
+        bg.addColorStop(1, '#0f172a');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, 256, 256);
+
+        ctx.fillStyle = '#d97706';
+        ctx.beginPath(); ctx.moveTo(56, 105); ctx.lineTo(66, 36); ctx.lineTo(110, 78); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(200, 105); ctx.lineTo(190, 36); ctx.lineTo(146, 78); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fca5a5';
+        ctx.beginPath(); ctx.moveTo(68, 95); ctx.lineTo(73, 52); ctx.lineTo(100, 78); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(188, 95); ctx.lineTo(183, 52); ctx.lineTo(156, 78); ctx.closePath(); ctx.fill();
+
+        const headGrad = ctx.createRadialGradient(128, 130, 18, 128, 138, 76);
+        headGrad.addColorStop(0, '#fbbf24');
+        headGrad.addColorStop(0.7, '#d97706');
+        headGrad.addColorStop(1, '#78350f');
+        ctx.fillStyle = headGrad;
+        ctx.beginPath(); ctx.ellipse(128, 140, 72, 66, 0, 0, Math.PI * 2); ctx.fill();
+
+        ctx.strokeStyle = '#78350f'; ctx.lineWidth = 4;
+        [-14, 0, 14].forEach(dx => {
+          ctx.beginPath(); ctx.moveTo(128 + dx, 80); ctx.lineTo(128 + dx * 0.6, 106); ctx.stroke();
+        });
+
+        ctx.fillStyle = '#f8fafc';
+        ctx.beginPath(); ctx.ellipse(115, 162, 18, 14, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(141, 162, 18, 14, 0, 0, Math.PI * 2); ctx.fill();
+
+        [98, 158].forEach(ex => {
+          ctx.fillStyle = '#bef264';
+          ctx.beginPath(); ctx.ellipse(ex, 130, 14, 11, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#090d16';
+          ctx.beginPath(); ctx.ellipse(ex, 130, 4.5, 9.5, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath(); ctx.arc(ex - 4, 126, 2.5, 0, Math.PI * 2); ctx.fill();
+        });
+
+        ctx.fillStyle = '#fb7185';
+        ctx.beginPath(); ctx.moveTo(120, 148); ctx.lineTo(136, 148); ctx.lineTo(128, 157); ctx.closePath(); ctx.fill();
+
+        ctx.strokeStyle = '#f1f5f9'; ctx.lineWidth = 1.8;
+        [-1, 1].forEach(dir => {
+          [-8, 0, 8].forEach(dy => {
+            ctx.beginPath();
+            ctx.moveTo(128 + dir * 24, 160 + dy * 0.5);
+            ctx.lineTo(128 + dir * 92, 152 + dy * 2.2);
+            ctx.stroke();
+          });
+        });
+      } else if (type === 'building') {
+        realState.metaLabel = '範例：建築 (64×64)';
+        const sky = ctx.createLinearGradient(0, 0, 0, 256);
+        sky.addColorStop(0, '#1e3a8a');
+        sky.addColorStop(1, '#3b82f6');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, 256, 256);
+
+        ctx.fillStyle = '#60a5fa';
+        ctx.beginPath(); ctx.moveTo(10, 110); ctx.lineTo(95, 50); ctx.lineTo(95, 110); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(95, 110); ctx.lineTo(185, 50); ctx.lineTo(185, 110); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(185, 110); ctx.lineTo(250, 60); ctx.lineTo(250, 110); ctx.closePath(); ctx.fill();
+
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(16, 110, 224, 128);
+
+        ctx.fillStyle = '#fde68a';
+        for (let r = 0; r < 2; r++) {
+          for (let col = 0; col < 5; col++) {
+            ctx.fillRect(28 + col * 42, 124 + r * 54, 30, 42);
+          }
+        }
+        ctx.fillStyle = '#e2e8f0';
+        for (let col = 0; col <= 5; col++) {
+          ctx.fillRect(18 + col * 42, 106, 8, 134);
+        }
+        ctx.fillRect(14, 106, 228, 10);
+        ctx.fillRect(14, 170, 228, 8);
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(0, 238, 256, 18);
+      } else if (type === 'sign') {
+        realState.metaLabel = '範例：八角形標誌 (64×64)';
+        const bg = ctx.createLinearGradient(0, 0, 0, 256);
+        bg.addColorStop(0, '#0f172a');
+        bg.addColorStop(1, '#334155');
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, 256, 256);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(121, 176, 14, 80);
+
+        const drawOct = (radius, color) => {
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          for (let i = 0; i < 8; i++) {
+            const ang = (Math.PI / 8) + i * (Math.PI / 4);
+            const x = 128 + radius * Math.cos(ang);
+            const y = 112 + radius * Math.sin(ang);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          ctx.fill();
+        };
+        drawOct(78, '#f8fafc');
+        drawOct(71, '#dc2626');
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(76, 102, 104, 20);
+      }
+
+      processRealImage();
+    }
+
+    function loadUploadedImage(file) {
+      if (!file || !file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const c = realState.sourceCanvas;
+          const ctx = c.getContext('2d');
+          ctx.clearRect(0, 0, 256, 256);
+          const scale = Math.max(256 / img.width, 256 / img.height);
+          const w = img.width * scale;
+          const h = img.height * scale;
+          ctx.drawImage(img, (256 - w) / 2, (256 - h) / 2, w, h);
+          realState.metaLabel = `${file.name} (${img.width}×${img.height} → 64×64)`;
+          processRealImage();
+        };
+        img.src = ev.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function processRealImage() {
+      document.getElementById('real-image-meta').textContent = realState.metaLabel;
+
+      const tmp = document.createElement('canvas');
+      tmp.width = REAL_SIZE;
+      tmp.height = REAL_SIZE;
+      const tCtx = tmp.getContext('2d');
+      tCtx.drawImage(realState.sourceCanvas, 0, 0, REAL_SIZE, REAL_SIZE);
+      const imgData = tCtx.getImageData(0, 0, REAL_SIZE, REAL_SIZE).data;
+
+      const gray = Array.from({ length: REAL_SIZE }, (_, r) =>
+        Array.from({ length: REAL_SIZE }, (_, c) => {
+          const idx = (r * REAL_SIZE + c) * 4;
+          return (0.299 * imgData[idx] + 0.587 * imgData[idx + 1] + 0.114 * imgData[idx + 2]) / 255;
+        })
+      );
+      realState.grayTensor = gray;
+
+      realState.conv1Maps = REAL_CONV1_FILTERS.map(f => {
+        return Array.from({ length: 62 }, (_, r) =>
+          Array.from({ length: 62 }, (_, c) => {
+            let s = 0;
+            for (let kr = 0; kr < 3; kr++)
+              for (let kc = 0; kc < 3; kc++)
+                s += gray[r + kr][c + kc] * f.w[kr][kc];
+            return Math.max(0, s);
+          })
+        );
+      });
+
+      realState.pool1Maps = realState.conv1Maps.map(m =>
+        Array.from({ length: 31 }, (_, r) =>
+          Array.from({ length: 31 }, (_, c) => Math.max(
+            m[r * 2][c * 2], m[r * 2][c * 2 + 1],
+            m[r * 2 + 1][c * 2], m[r * 2 + 1][c * 2 + 1]
+          ))
+        )
+      );
+
+      realState.conv2Maps = REAL_CONV2_FILTERS.map(f => {
+        return Array.from({ length: 29 }, (_, r) =>
+          Array.from({ length: 29 }, (_, c) => {
+            let s = f.bias;
+            for (let ch = 0; ch < 6; ch++) {
+              let patchAvg = 0;
+              for (let kr = 0; kr < 3; kr++)
+                for (let kc = 0; kc < 3; kc++)
+                  patchAvg += realState.pool1Maps[ch][r + kr][c + kc];
+              s += (patchAvg / 9) * f.weights[ch];
+            }
+            return Math.max(0, s);
+          })
+        );
+      });
+
+      realState.pool2Maps = realState.conv2Maps.map(m =>
+        Array.from({ length: 14 }, (_, r) =>
+          Array.from({ length: 14 }, (_, c) => Math.max(
+            m[r * 2][c * 2], m[r * 2][c * 2 + 1],
+            m[r * 2 + 1][c * 2], m[r * 2 + 1][c * 2 + 1]
+          ))
+        )
+      );
+
+      renderRealPipeline();
+    }
+
+    function drawMatrixHeatmap(canvas, matrix, rgb = [56, 189, 248]) {
+      const h = matrix.length;
+      const w = matrix[0].length;
+      const ctx = canvas.getContext('2d');
+      const cw = canvas.width / w;
+      const ch = canvas.height / h;
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const maxV = Math.max(0.25, ...matrix.flat());
+      for (let r = 0; r < h; r++) {
+        for (let c = 0; c < w; c++) {
+          const norm = Math.min(1, Math.max(0, matrix[r][c] / maxV));
+          if (norm > 0.02) {
+            ctx.fillStyle = `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(0.08 + 0.92 * norm).toFixed(2)})`;
+            ctx.fillRect(c * cw, r * ch, Math.ceil(cw), Math.ceil(ch));
+          }
+        }
+      }
+    }
+
+    function renderRealPreview() {
+      const prevCvs = document.getElementById('real-preview-canvas');
+      const pCtx = prevCvs.getContext('2d');
+      pCtx.drawImage(realState.sourceCanvas, 0, 0, prevCvs.width, prevCvs.height);
+
+      if (realState.showOverlay) {
+        const map = realState.selectedStage === 1
+          ? realState.pool1Maps[realState.selectedIdx]
+          : realState.pool2Maps[realState.selectedIdx];
+        if (map) {
+          const h = map.length;
+          const w = map[0].length;
+          const cw = prevCvs.width / w;
+          const ch = prevCvs.height / h;
+          const maxV = Math.max(0.25, ...map.flat());
+          for (let r = 0; r < h; r++) {
+            for (let c = 0; c < w; c++) {
+              const norm = Math.min(1, map[r][c] / maxV);
+              if (norm > 0.18) {
+                pCtx.fillStyle = realState.selectedStage === 1
+                  ? `rgba(56, 189, 248, ${(norm * 0.55).toFixed(2)})`
+                  : `rgba(251, 191, 36, ${(norm * 0.62).toFixed(2)})`;
+                pCtx.fillRect(c * cw, r * ch, Math.ceil(cw), Math.ceil(ch));
+              }
+            }
+          }
+        }
+      }
+
+      const label = realState.selectedStage === 1
+        ? REAL_CONV1_FILTERS[realState.selectedIdx].name
+        : REAL_CONV2_FILTERS[realState.selectedIdx].name;
+      document.getElementById('real-overlay-label').textContent = label;
+
+      const gCvs = document.getElementById('real-gray-canvas');
+      drawMatrixHeatmap(gCvs, realState.grayTensor, [226, 232, 240]);
+    }
+
+    function renderRealPipeline() {
+      renderRealPreview();
+
+      const c1Grid = document.getElementById('real-conv1-grid');
+      c1Grid.innerHTML = '';
+      realState.pool1Maps.forEach((m, idx) => {
+        const isSel = realState.selectedStage === 1 && realState.selectedIdx === idx;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `bg-slate-950 rounded-lg p-1.5 flex flex-col items-center border transition-all ${
+          isSel ? 'border-sky-400 ring-1 ring-sky-400' : 'border-slate-800 hover:border-slate-600'
+        }`;
+        const cvs = document.createElement('canvas');
+        cvs.width = 62; cvs.height = 62;
+        cvs.className = 'w-full aspect-square rounded';
+        drawMatrixHeatmap(cvs, m, [56, 189, 248]);
+        const lbl = document.createElement('span');
+        lbl.className = 'text-[10px] mono text-slate-300 mt-1 truncate w-full text-center';
+        lbl.textContent = REAL_CONV1_FILTERS[idx].name;
+        btn.appendChild(cvs);
+        btn.appendChild(lbl);
+        btn.addEventListener('click', () => {
+          realState.selectedStage = 1;
+          realState.selectedIdx = idx;
+          renderRealPipeline();
+        });
+        c1Grid.appendChild(btn);
+      });
+
+      const kIdx = realState.selectedStage === 1 ? realState.selectedIdx : 0;
+      const kObj = REAL_CONV1_FILTERS[kIdx];
+      const flatC1 = realState.conv1Maps[kIdx].flat();
+      const activePct = ((flatC1.filter(v => v > 0.05).length / flatC1.length) * 100).toFixed(0);
+      document.getElementById('real-insp-name').textContent = `卷積核：${kObj.name}`;
+      document.getElementById('real-insp-sparsity').textContent = `ReLU 激活率：${activePct}%`;
+      const wGrid = document.getElementById('real-insp-weights');
+      wGrid.innerHTML = '';
+      kObj.w.flat().forEach(w => {
+        const d = document.createElement('div');
+        d.className = `py-0.5 rounded ${w > 0 ? 'bg-sky-500/20 text-sky-300' : w < 0 ? 'bg-rose-500/20 text-rose-300' : 'bg-slate-900 text-slate-500'}`;
+        d.textContent = w;
+        wGrid.appendChild(d);
+      });
+
+      const c2Grid = document.getElementById('real-conv2-grid');
+      c2Grid.innerHTML = '';
+      realState.pool2Maps.forEach((m, idx) => {
+        const isSel = realState.selectedStage === 2 && realState.selectedIdx === idx;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `bg-slate-950 rounded-lg p-2 flex flex-col items-center border transition-all ${
+          isSel ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-800 hover:border-slate-600'
+        }`;
+        const cvs = document.createElement('canvas');
+        cvs.width = 70; cvs.height = 70;
+        cvs.className = 'w-full aspect-square rounded';
+        drawMatrixHeatmap(cvs, m, [251, 191, 36]);
+        const lbl = document.createElement('span');
+        lbl.className = 'text-[10px] mono text-slate-300 mt-1.5 truncate w-full text-center';
+        lbl.textContent = REAL_CONV2_FILTERS[idx].name;
+        btn.appendChild(cvs);
+        btn.appendChild(lbl);
+        btn.addEventListener('click', () => {
+          realState.selectedStage = 2;
+          realState.selectedIdx = idx;
+          renderRealPipeline();
+        });
+        c2Grid.appendChild(btn);
+      });
+
+      const gap1 = realState.pool1Maps.map(m => {
+        const flat = m.flat();
+        return flat.reduce((a, b) => a + b, 0) / flat.length;
+      });
+      const gap2 = realState.pool2Maps.map(m => {
+        const flat = m.flat();
+        return flat.reduce((a, b) => a + b, 0) / flat.length;
+      });
+
+      const orthoEnergy = gap1[0] + gap1[1];
+      const diagEnergy = gap1[2] + gap1[3];
+      const lapEnergy = gap1[4];
+
+      const sil = realState.pool2Maps[3];
+      let centerSum = 0, borderSum = 0;
+      for (let r = 0; r < 14; r++) {
+        for (let c = 0; c < 14; c++) {
+          if (r >= 3 && r <= 10 && c >= 3 && c <= 10) centerSum += sil[r][c];
+          else borderSum += sil[r][c];
+        }
+      }
+      const centerRatio = centerSum / (centerSum + borderSum + 0.01);
+
+      const logits = [
+        gap2[0] * 3.0 + (orthoEnergy / (diagEnergy + 0.2)) * 1.4 - lapEnergy * 1.2,
+        gap2[1] * 2.5 + centerRatio * 3.0 + (diagEnergy / (orthoEnergy + 0.2)) * 1.0,
+        gap2[2] * 3.2 + lapEnergy * 2.5,
+        gap2[3] * 2.2 + centerRatio * 1.5 - gap2[2] * 1.4
+      ];
+
+      const maxL = Math.max(...logits);
+      const exps = logits.map(l => Math.exp(l - maxL));
+      const sumE = exps.reduce((a, b) => a + b, 0);
+      const probs = exps.map(e => e / sumE);
+
+      const classes = [
+        '幾何 / 建築',
+        '有機 / 肖像',
+        '紋理 / 自然',
+        '圖形 / 符號'
+      ];
+
+      let bestIdx = 0;
+      probs.forEach((p, i) => { if (p > probs[bestIdx]) bestIdx = i; });
+
+      const probsEl = document.getElementById('real-probs-container');
+      probsEl.innerHTML = '';
+      probs.forEach((p, idx) => {
+        const pct = (p * 100).toFixed(1);
+        const row = document.createElement('div');
+        row.className = 'space-y-1';
+        row.innerHTML = `
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-200 font-medium">${classes[idx]}</span>
+            <span class="mono ${idx === bestIdx ? 'text-emerald-400 font-semibold' : 'text-slate-400'}">${pct}%</span>
+          </div>
+          <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+            <div class="h-full bg-emerald-400 transition-all duration-200" style="width: ${pct}%"></div>
+          </div>
+        `;
+        probsEl.appendChild(row);
+      });
+
+      document.getElementById('real-top-class').textContent = classes[bestIdx];
+      document.getElementById('real-dom-axis').textContent =
+        orthoEnergy > diagEnergy * 1.15 ? '正交（垂直／水平）' :
+        diagEnergy > orthoEnergy * 1.15 ? '斜向 / 曲線' : '多角度均衡';
+      document.getElementById('real-edge-density').textContent = `${Math.min(100, (lapEnergy * 120)).toFixed(0)}%`;
+      document.getElementById('real-center-focus').textContent = `${(centerRatio * 100).toFixed(0)}%`;
+    }
+
+    const dropzone = document.getElementById('real-dropzone');
+    const fileInput = document.getElementById('real-file-input');
+    dropzone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) loadUploadedImage(e.target.files[0]);
+    });
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('border-sky-400', 'bg-sky-500/10');
+    });
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.classList.remove('border-sky-400', 'bg-sky-500/10');
+    });
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('border-sky-400', 'bg-sky-500/10');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) loadUploadedImage(e.dataTransfer.files[0]);
+    });
+
+    document.querySelectorAll('.real-sample-btn').forEach(btn => {
+      btn.addEventListener('click', () => generateRealSample(btn.dataset.realSample));
+    });
+    document.getElementById('chk-real-overlay').addEventListener('change', (e) => {
+      realState.showOverlay = e.target.checked;
+      renderRealPreview();
+    });
+
+    document.getElementById('btn-real-animate').addEventListener('click', () => {
+      if (realState.animTimer) clearInterval(realState.animTimer);
+      const boxes = [0, 1, 2, 3].map(i => document.getElementById(`stage-box-${i}`));
+      boxes.forEach(b => b.classList.remove('stage-highlight'));
+      let step = 0;
+      boxes[0].classList.add('stage-highlight');
+      realState.animTimer = setInterval(() => {
+        boxes.forEach(b => b.classList.remove('stage-highlight'));
+        step++;
+        if (step < boxes.length) {
+          boxes[step].classList.add('stage-highlight');
+        } else {
+          clearInterval(realState.animTimer);
+          realState.animTimer = null;
+        }
+      }, 650);
+    });
+
+    // =========================================================================
+    // 2. 卷積實驗室 (8x8)
+    // =========================================================================
+    const INPUT_SIZE = 8;
+    const KERNEL_SIZE = 3;
+
+    const INPUT_PRESETS = {
+      cross: [
+        [0,0,0,1,1,0,0,0],[0,0,0,1,1,0,0,0],[0,0,0,1,1,0,0,0],[1,1,1,1,1,1,1,1],
+        [1,1,1,1,1,1,1,1],[0,0,0,1,1,0,0,0],[0,0,0,1,1,0,0,0],[0,0,0,1,1,0,0,0],
+      ],
+      box: [
+        [0,0,0,0,0,0,0,0],[0,1,1,1,1,1,1,0],[0,1,0,0,0,0,1,0],[0,1,0,0,0,0,1,0],
+        [0,1,0,0,0,0,1,0],[0,1,0,0,0,0,1,0],[0,1,1,1,1,1,1,0],[0,0,0,0,0,0,0,0],
+      ],
+      vertical: [
+        [0,0,0,1,1,1,1,1],[0,0,0,1,1,1,1,1],[0,0,0,1,1,1,1,1],[0,0,0,1,1,1,1,1],
+        [0,0,0,1,1,1,1,1],[0,0,0,1,1,1,1,1],[0,0,0,1,1,1,1,1],[0,0,0,1,1,1,1,1],
+      ],
+      horizontal: [
+        [0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],
+        [1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1],[1,1,1,1,1,1,1,1],
+      ],
+      diagonal: [
+        [0,0,0,0,0,0,1,1],[0,0,0,0,0,1,1,0],[0,0,0,0,1,1,0,0],[0,0,0,1,1,0,0,0],
+        [0,0,1,1,0,0,0,0],[0,1,1,0,0,0,0,0],[1,1,0,0,0,0,0,0],[1,0,0,0,0,0,0,0],
+      ],
+      digit7: [
+        [0,1,1,1,1,1,1,0],[0,1,1,1,1,1,1,0],[0,0,0,0,0,1,0,0],[0,0,0,0,1,1,0,0],
+        [0,0,0,1,1,0,0,0],[0,0,1,1,0,0,0,0],[0,0,1,0,0,0,0,0],[0,0,1,0,0,0,0,0],
+      ],
+      digit0: [
+        [0,0,1,1,1,1,0,0],[0,1,1,0,0,1,1,0],[0,1,0,0,0,0,1,0],[0,1,0,0,0,0,1,0],
+        [0,1,0,0,0,0,1,0],[0,1,0,0,0,0,1,0],[0,1,1,0,0,1,1,0],[0,0,1,1,1,1,0,0],
+      ],
+      checker: [
+        [1,0,1,0,1,0,1,0],[0,1,0,1,0,1,0,1],[1,0,1,0,1,0,1,0],[0,1,0,1,0,1,0,1],
+        [1,0,1,0,1,0,1,0],[0,1,0,1,0,1,0,1],[1,0,1,0,1,0,1,0],[0,1,0,1,0,1,0,1],
+      ]
+    };
+
+    const KERNEL_PRESETS = {
+      sobelX:    [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]],
+      sobelY:    [[-1, -2, -1], [0, 0, 0], [1, 2, 1]],
+      laplacian: [[0, 1, 0], [1, -4, 1], [0, 1, 0]],
+      sharpen:   [[0, -1, 0], [-1, 5, -1], [0, -1, 0]],
+      blur:      [[0.11, 0.11, 0.11], [0.11, 0.11, 0.11], [0.11, 0.11, 0.11]],
+      emboss:    [[-2, -1, 0], [-1, 1, 1], [0, 1, 2]],
+      identity:  [[0, 0, 0], [0, 1, 0], [0, 0, 0]],
+    };
+
+    const state = {
+      input: INPUT_PRESETS.cross.map(r => [...r]),
+      kernel: KERNEL_PRESETS.sobelX.map(r => [...r]),
+      stride: 1, padding: 1, bias: 0, activation: 'relu', pooling: 'max',
+      brush: 1.0, showValues: true, activeOutRow: 0, activeOutCol: 0,
+      isPlaying: false, playTimer: null, speedMs: 250, isDrawing: false
+    };
+
+    function applyActivation(z, type) {
+      if (type === 'none') return z;
+      if (type === 'relu') return Math.max(0, z);
+      if (type === 'leaky') return z >= 0 ? z : 0.1 * z;
+      if (type === 'sigmoid') return 1 / (1 + Math.exp(-z));
+      if (type === 'tanh') return Math.tanh(z);
+      return z;
+    }
+
+    function computeConvLab() {
+      const N = INPUT_SIZE, P = state.padding, S = state.stride, K = KERNEL_SIZE;
+      const paddedSize = N + 2 * P;
+      const padded = Array.from({ length: paddedSize }, (_, r) =>
+        Array.from({ length: paddedSize }, (_, c) => {
+          const ir = r - P, ic = c - P;
+          return (ir >= 0 && ir < N && ic >= 0 && ic < N) ? state.input[ir][ic] : 0;
+        })
+      );
+      const outSize = Math.floor((N + 2 * P - K) / S) + 1;
+      const rawMap = [], actMap = [];
+      for (let or = 0; or < outSize; or++) {
+        const rawRow = [], actRow = [];
+        for (let oc = 0; oc < outSize; oc++) {
+          let sum = 0;
+          for (let kr = 0; kr < K; kr++)
+            for (let kc = 0; kc < K; kc++)
+              sum += padded[or * S + kr][oc * S + kc] * state.kernel[kr][kc];
+          const z = sum + state.bias;
+          rawRow.push(z);
+          actRow.push(applyActivation(z, state.activation));
+        }
+        rawMap.push(rawRow);
+        actMap.push(actRow);
+      }
+      let pooled = null;
+      if (state.pooling !== 'none' && outSize >= 2) {
+        const pSize = Math.floor(outSize / 2);
+        pooled = Array.from({ length: pSize }, (_, pr) =>
+          Array.from({ length: pSize }, (_, pc) => {
+            const vals = [actMap[pr*2][pc*2], actMap[pr*2][pc*2+1], actMap[pr*2+1][pc*2], actMap[pr*2+1][pc*2+1]];
+            return state.pooling === 'max' ? Math.max(...vals) : vals.reduce((a, b) => a + b, 0) / 4;
+          })
+        );
+      }
+      return { padded, paddedSize, outSize, rawMap, actMap, pooled };
+    }
+
+    function valToBg(v, maxAbs = 4) {
+      if (Math.abs(v) < 1e-4) return 'rgba(15, 23, 42, 0.95)';
+      const norm = Math.min(1, Math.abs(v) / maxAbs);
+      return v > 0 ? `rgba(56, 189, 248, ${(0.18 + 0.77 * norm).toFixed(2)})` : `rgba(244, 63, 94, ${(0.18 + 0.77 * norm).toFixed(2)})`;
+    }
+
+    function inputValToBg(v) {
+      if (v <= 0) return '#090d16';
+      return `rgba(226, 232, 240, ${Math.min(1, Math.max(0.15, v)).toFixed(2)})`;
+    }
+
+    function fmtNum(v) {
+      const r = Math.round(v * 100) / 100;
+      return Number.isInteger(r) ? String(r) : r.toFixed(1);
+    }
+
+    function renderConvLab() {
+      const { padded, paddedSize, outSize, rawMap, actMap, pooled } = computeConvLab();
+      if (state.activeOutRow >= outSize) state.activeOutRow = 0;
+      if (state.activeOutCol >= outSize) state.activeOutCol = 0;
+      const ar = state.activeOutRow, ac = state.activeOutCol;
+      const winStartR = ar * state.stride, winStartC = ac * state.stride;
+
+      document.getElementById('dim-padded').textContent = `${paddedSize}×${paddedSize}`;
+      document.getElementById('dim-output').textContent = `${outSize}×${outSize}`;
+      document.getElementById('dim-pooled').textContent = pooled ? `${pooled.length}×${pooled.length}` : '關閉';
+      document.getElementById('dim-formula').textContent = `O = ⌊(${INPUT_SIZE} + 2·${state.padding} − ${KERNEL_SIZE}) / ${state.stride}⌋ + 1 = ${outSize}`;
+      document.getElementById('active-coord-badge').textContent = `輸出 [${ar}, ${ac}]`;
+      document.getElementById('kernel-sum-badge').textContent = `Σw = ${fmtNum(state.kernel.flat().reduce((a, b) => a + b, 0))}`;
+
+      const inputContainer = document.getElementById('input-grid-container');
+      inputContainer.style.gridTemplateColumns = `repeat(${paddedSize}, minmax(0, 1fr))`;
+      const cellPx = paddedSize > 10 ? 22 : (paddedSize > 8 ? 26 : 30);
+      inputContainer.innerHTML = '';
+
+      for (let r = 0; r < paddedSize; r++) {
+        for (let c = 0; c < paddedSize; c++) {
+          const isPad = r < state.padding || r >= INPUT_SIZE + state.padding || c < state.padding || c >= INPUT_SIZE + state.padding;
+          const inWindow = r >= winStartR && r < winStartR + KERNEL_SIZE && c >= winStartC && c < winStartC + KERNEL_SIZE;
+          const val = padded[r][c];
+          const cell = document.createElement('div');
+          cell.style.width = `${cellPx}px`; cell.style.height = `${cellPx}px`;
+          cell.className = `grid-cell flex items-center justify-center rounded-[3px] text-[10px] mono ${
+            isPad ? 'border border-dashed border-slate-700/80 text-slate-600 bg-slate-950/60' : 'border border-slate-800 cursor-pointer'
+          } ${inWindow ? 'ring-2 ring-amber-400 z-10' : ''}`;
+          if (!isPad) {
+            cell.style.backgroundColor = inputValToBg(val);
+            cell.style.color = val > 0.55 ? '#090d16' : '#94a3b8';
+            const ir = r - state.padding, ic = c - state.padding;
+            cell.addEventListener('pointerdown', (e) => { e.preventDefault(); state.isDrawing = true; state.input[ir][ic] = state.brush; renderConvLab(); });
+            cell.addEventListener('pointerenter', () => { if (state.isDrawing) { state.input[ir][ic] = state.brush; renderConvLab(); } });
+          }
+          if (state.showValues) cell.textContent = isPad ? '0' : (val === 0 ? '0' : fmtNum(val));
+          inputContainer.appendChild(cell);
+        }
+      }
+
+      const kernelContainer = document.getElementById('kernel-grid-container');
+      kernelContainer.innerHTML = '';
+      for (let kr = 0; kr < KERNEL_SIZE; kr++) {
+        for (let kc = 0; kc < KERNEL_SIZE; kc++) {
+          const w = state.kernel[kr][kc];
+          const inp = document.createElement('input');
+          inp.type = 'number'; inp.step = '0.5'; inp.value = Number(w.toFixed(2));
+          inp.className = 'w-14 h-12 text-center mono text-xs font-semibold rounded-md border border-slate-700 text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-400';
+          inp.style.backgroundColor = valToBg(w, 3);
+          inp.addEventListener('change', (e) => {
+            const parsed = parseFloat(e.target.value);
+            state.kernel[kr][kc] = Number.isFinite(parsed) ? parsed : 0;
+            document.getElementById('select-kernel-preset').value = 'custom';
+            renderConvLab();
+          });
+          kernelContainer.appendChild(inp);
+        }
+      }
+
+      const mathGrid = document.getElementById('math-patch-grid');
+      mathGrid.innerHTML = '';
+      let dotSum = 0;
+      for (let kr = 0; kr < KERNEL_SIZE; kr++) {
+        for (let kc = 0; kc < KERNEL_SIZE; kc++) {
+          const xv = padded[winStartR + kr][winStartC + kc], wv = state.kernel[kr][kc], prod = xv * wv;
+          dotSum += prod;
+          const box = document.createElement('div');
+          box.className = 'px-1.5 py-1 rounded bg-slate-900 border border-slate-800 text-center';
+          box.innerHTML = `<div class="text-slate-400">${fmtNum(xv)}×${fmtNum(wv)}</div><div class="${prod > 0 ? 'text-sky-300' : prod < 0 ? 'text-rose-300' : 'text-slate-500'} font-semibold">${fmtNum(prod)}</div>`;
+          mathGrid.appendChild(box);
+        }
+      }
+
+      document.getElementById('math-summary').innerHTML = `
+        <div class="flex justify-between"><span class="text-slate-400">內積 + 偏置：</span><span class="text-slate-200">${fmtNum(dotSum)} + (${fmtNum(state.bias)}) = <strong>${fmtNum(rawMap[ar][ac])}</strong></span></div>
+        <div class="flex justify-between"><span class="text-slate-400">激活函數 (${state.activation.toUpperCase()})：</span><span class="text-sky-400 font-semibold">${fmtNum(actMap[ar][ac])}</span></div>
+      `;
+
+      const featureContainer = document.getElementById('feature-grid-container');
+      featureContainer.style.gridTemplateColumns = `repeat(${outSize}, minmax(0, 1fr))`;
+      const fCellPx = outSize > 8 ? 24 : 30;
+      featureContainer.innerHTML = '';
+      const maxAbs = Math.max(1, ...actMap.flat().map(Math.abs));
+      for (let r = 0; r < outSize; r++) {
+        for (let c = 0; c < outSize; c++) {
+          const val = actMap[r][c], isActive = r === ar && c === ac;
+          const cell = document.createElement('button');
+          cell.type = 'button';
+          cell.style.width = `${fCellPx}px`; cell.style.height = `${fCellPx}px`;
+          cell.style.backgroundColor = valToBg(val, maxAbs);
+          cell.className = `grid-cell flex items-center justify-center rounded-[3px] text-[10px] mono border border-slate-800/80 ${
+            isActive ? 'ring-2 ring-amber-400 z-10 font-bold text-white' : 'text-slate-200 hover:ring-1 hover:ring-slate-400'
+          }`;
+          if (state.showValues) cell.textContent = fmtNum(val);
+          cell.addEventListener('click', () => { stopPlayback(); state.activeOutRow = r; state.activeOutCol = c; renderConvLab(); });
+          featureContainer.appendChild(cell);
+        }
+      }
+
+      const pooledSection = document.getElementById('pooled-section');
+      const pooledContainer = document.getElementById('pooled-grid-container');
+      if (!pooled) {
+        pooledSection.classList.add('opacity-40');
+        pooledContainer.innerHTML = '<span class="text-[11px] text-slate-500 mono px-3 py-2">池化已關閉或輸出 &lt; 2×2</span>';
+        pooledContainer.style.gridTemplateColumns = '1fr';
+      } else {
+        pooledSection.classList.remove('opacity-40');
+        document.getElementById('pooled-type-badge').textContent = state.pooling === 'max' ? '最大' : '平均';
+        const pSize = pooled.length;
+        pooledContainer.style.gridTemplateColumns = `repeat(${pSize}, minmax(0, 1fr))`;
+        pooledContainer.innerHTML = '';
+        const pMax = Math.max(1, ...pooled.flat().map(Math.abs));
+        for (let r = 0; r < pSize; r++) {
+          for (let c = 0; c < pSize; c++) {
+            const val = pooled[r][c];
+            const cell = document.createElement('div');
+            cell.style.width = '34px'; cell.style.height = '34px';
+            cell.style.backgroundColor = valToBg(val, pMax);
+            cell.className = 'flex items-center justify-center rounded-[4px] text-[11px] mono border border-emerald-500/30 text-slate-100';
+            if (state.showValues) cell.textContent = fmtNum(val);
+            pooledContainer.appendChild(cell);
+          }
+        }
+      }
+    }
+
+    function stepScan(delta) {
+      const { outSize } = computeConvLab();
+      const total = outSize * outSize;
+      let idx = state.activeOutRow * outSize + state.activeOutCol + delta;
+      if (idx >= total) idx = 0;
+      if (idx < 0) idx = total - 1;
+      state.activeOutRow = Math.floor(idx / outSize);
+      state.activeOutCol = idx % outSize;
+      renderConvLab();
+    }
+
+    function stopPlayback() {
+      state.isPlaying = false;
+      if (state.playTimer) { clearInterval(state.playTimer); state.playTimer = null; }
+      document.getElementById('play-icon').textContent = '▶';
+      document.getElementById('play-text').textContent = '播放';
+    }
+
+    function togglePlayback() {
+      if (state.isPlaying) { stopPlayback(); }
+      else {
+        state.isPlaying = true;
+        document.getElementById('play-icon').textContent = '⏸';
+        document.getElementById('play-text').textContent = '暫停';
+        state.playTimer = setInterval(() => stepScan(1), state.speedMs);
+      }
+    }
+
+    window.addEventListener('pointerup', () => { state.isDrawing = false; });
+    document.getElementById('select-input-preset').addEventListener('change', (e) => { state.input = INPUT_PRESETS[e.target.value].map(r => [...r]); renderConvLab(); });
+    document.getElementById('btn-clear-input').addEventListener('click', () => { state.input = Array.from({ length: INPUT_SIZE }, () => Array(INPUT_SIZE).fill(0)); renderConvLab(); });
+
+    function setBrush(val, activeId) {
+      state.brush = val;
+      ['brush-1', 'brush-05', 'brush-0'].forEach(id => {
+        document.getElementById(id).className = id === activeId
+          ? 'px-2 py-0.5 text-[11px] mono rounded border border-sky-500 bg-sky-500/20 text-sky-300'
+          : 'px-2 py-0.5 text-[11px] mono rounded border border-slate-700 bg-slate-950 text-slate-400';
+      });
+    }
+    document.getElementById('brush-1').addEventListener('click', () => setBrush(1.0, 'brush-1'));
+    document.getElementById('brush-05').addEventListener('click', () => setBrush(0.5, 'brush-05'));
+    document.getElementById('brush-0').addEventListener('click', () => setBrush(0.0, 'brush-0'));
+    document.getElementById('select-kernel-preset').addEventListener('change', (e) => { if (KERNEL_PRESETS[e.target.value]) { state.kernel = KERNEL_PRESETS[e.target.value].map(r => [...r]); renderConvLab(); } });
+    document.getElementById('slider-bias').addEventListener('input', (e) => { state.bias = parseFloat(e.target.value); document.getElementById('bias-val').textContent = state.bias.toFixed(1); renderConvLab(); });
+    document.getElementById('select-stride').addEventListener('change', (e) => { state.stride = parseInt(e.target.value, 10); state.activeOutRow = 0; state.activeOutCol = 0; renderConvLab(); });
+    document.getElementById('select-padding').addEventListener('change', (e) => { state.padding = parseInt(e.target.value, 10); state.activeOutRow = 0; state.activeOutCol = 0; renderConvLab(); });
+    document.getElementById('select-activation').addEventListener('change', (e) => { state.activation = e.target.value; renderConvLab(); });
+    document.getElementById('select-pooling').addEventListener('change', (e) => { state.pooling = e.target.value; renderConvLab(); });
+    document.getElementById('chk-show-values').addEventListener('change', (e) => { state.showValues = e.target.checked; renderConvLab(); });
+    document.getElementById('btn-play').addEventListener('click', togglePlayback);
+    document.getElementById('btn-prev').addEventListener('click', () => { stopPlayback(); stepScan(-1); });
+    document.getElementById('btn-next').addEventListener('click', () => { stopPlayback(); stepScan(1); });
+    document.getElementById('btn-reset-scan').addEventListener('click', () => { stopPlayback(); state.activeOutRow = 0; state.activeOutCol = 0; renderConvLab(); });
+    document.getElementById('slider-speed').addEventListener('input', (e) => {
+      state.speedMs = parseInt(e.target.value, 10);
+      document.getElementById('speed-val').textContent = `${state.speedMs}ms`;
+      if (state.isPlaying) { stopPlayback(); togglePlayback(); }
+    });
+
+    // =========================================================================
+    // 3. 多層形狀分類器 (16x16)
+    // =========================================================================
+    const ARCH_SIZE = 16;
+    const archGrid = Array.from({ length: ARCH_SIZE }, () => Array(ARCH_SIZE).fill(0));
+    let archDrawing = false;
+
+    const CONV1_FILTERS = [
+      { name: '垂直邊緣',  w: [[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]] },
+      { name: '水平邊緣', w: [[-1, -2, -1], [0, 0, 0], [1, 2, 1]] },
+      { name: '斜線 /',     w: [[-1, -1, 2], [-1, 2, -1], [2, -1, -1]] },
+      { name: '斜線 \\',    w: [[2, -1, -1], [-1, 2, -1], [-1, -1, 2]] },
+    ];
+
+    const CONV2_FILTERS = [
+      { name: '曲線 / 環形',  chWeights: [0.4, 0.4, 0.8, 0.8],  bias: -2.5 },
+      { name: '方框角點',    chWeights: [1.0, 1.0, -0.5, -0.5], bias: -2.0 },
+      { name: '十字交叉', chWeights: [1.2, 1.2, -0.8, -0.8], bias: -3.2 },
+      { name: '斜向筆劃',   chWeights: [-0.3, -0.3, 1.6, -1.0], bias: -1.5 }
+    ];
+
+    const CLASS_LABELS = ['圓形 ○', '方形 □', '十字 +', '斜線 /'];
+
+    function drawArchPreset(shape) {
+      for (let r = 0; r < ARCH_SIZE; r++) archGrid[r].fill(0);
+      if (shape === 'circle') {
+        for (let r = 0; r < ARCH_SIZE; r++)
+          for (let c = 0; c < ARCH_SIZE; c++) {
+            const d = Math.hypot(r - 7.5, c - 7.5);
+            if (d >= 4.2 && d <= 6.2) archGrid[r][c] = 1;
+          }
+      } else if (shape === 'square') {
+        for (let r = 2; r <= 13; r++)
+          for (let c = 2; c <= 13; c++)
+            if (r <= 3 || r >= 12 || c <= 3 || c >= 12) archGrid[r][c] = 1;
+      } else if (shape === 'cross') {
+        for (let i = 2; i <= 13; i++) {
+          archGrid[7][i] = 1; archGrid[8][i] = 1; archGrid[i][7] = 1; archGrid[i][8] = 1;
+        }
+      } else if (shape === 'diag') {
+        for (let i = 1; i <= 14; i++) {
+          archGrid[15 - i][i] = 1;
+          if (15 - i - 1 >= 0) archGrid[15 - i - 1][i] = 1;
+        }
+      }
+      renderArchCanvas();
+      runArchForward();
+    }
+
+    function renderArchCanvas() {
+      const canvas = document.getElementById('arch-draw-canvas');
+      const ctx = canvas.getContext('2d');
+      const cell = canvas.width / ARCH_SIZE;
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      for (let r = 0; r < ARCH_SIZE; r++) {
+        for (let c = 0; c < ARCH_SIZE; c++) {
+          const v = archGrid[r][c];
+          if (v > 0) {
+            ctx.fillStyle = `rgba(226, 232, 240, ${v})`;
+            ctx.fillRect(c * cell + 0.5, r * cell + 0.5, cell - 1, cell - 1);
+          } else {
+            ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 0.5;
+            ctx.strokeRect(c * cell, r * cell, cell, cell);
+          }
+        }
+      }
+    }
+
+    function renderMiniHeatmap(canvas, matrix, colorHex = '#38bdf8') {
+      const h = matrix.length, w = matrix[0].length, ctx = canvas.getContext('2d');
+      const cw = canvas.width / w, ch = canvas.height / h;
+      ctx.fillStyle = '#090d16'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const maxV = Math.max(0.5, ...matrix.flat());
+      for (let r = 0; r < h; r++)
+        for (let c = 0; c < w; c++) {
+          const norm = Math.min(1, Math.max(0, matrix[r][c] / maxV));
+          if (norm > 0.02) {
+            ctx.fillStyle = colorHex; ctx.globalAlpha = 0.1 + 0.9 * norm;
+            ctx.fillRect(c * cw, r * ch, cw, ch); ctx.globalAlpha = 1.0;
+          }
+        }
+    }
+
+    function runArchForward() {
+      const pool1Maps = CONV1_FILTERS.map(f => {
+        const conv = Array.from({ length: 14 }, (_, r) =>
+          Array.from({ length: 14 }, (_, c) => {
+            let s = 0;
+            for (let kr = 0; kr < 3; kr++)
+              for (let kc = 0; kc < 3; kc++)
+                s += archGrid[r + kr][c + kc] * f.w[kr][kc];
+            return Math.max(0, s);
+          })
+        );
+        return Array.from({ length: 7 }, (_, pr) =>
+          Array.from({ length: 7 }, (_, pc) => Math.max(
+            conv[pr*2][pc*2], conv[pr*2][pc*2+1], conv[pr*2+1][pc*2], conv[pr*2+1][pc*2+1]
+          ))
+        );
+      });
+
+      const c1Container = document.getElementById('arch-conv1-maps');
+      c1Container.innerHTML = '';
+      pool1Maps.forEach((m, idx) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'bg-slate-950 border border-slate-800 rounded-lg p-2 flex flex-col items-center';
+        const cvs = document.createElement('canvas'); cvs.width = 70; cvs.height = 70;
+        cvs.className = 'rounded border border-slate-800';
+        renderMiniHeatmap(cvs, m, '#38bdf8');
+        const lbl = document.createElement('span'); lbl.className = 'text-[10px] mono text-slate-300 mt-1.5';
+        lbl.textContent = CONV1_FILTERS[idx].name;
+        wrap.appendChild(cvs); wrap.appendChild(lbl); c1Container.appendChild(wrap);
+      });
+
+      const conv2Maps = CONV2_FILTERS.map(f => {
+        return Array.from({ length: 5 }, (_, r) =>
+          Array.from({ length: 5 }, (_, c) => {
+            let s = f.bias;
+            for (let ch = 0; ch < 4; ch++) {
+              let chSum = 0;
+              for (let kr = 0; kr < 3; kr++)
+                for (let kc = 0; kc < 3; kc++)
+                  chSum += pool1Maps[ch][r + kr][c + kc];
+              s += (chSum / 9) * f.chWeights[ch] * 3;
+            }
+            return Math.max(0, s);
+          })
+        );
+      });
+
+      const c2Container = document.getElementById('arch-conv2-maps');
+      c2Container.innerHTML = '';
+      conv2Maps.forEach((m, idx) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'bg-slate-950 border border-slate-800 rounded-lg p-2 flex flex-col items-center';
+        const cvs = document.createElement('canvas'); cvs.width = 70; cvs.height = 70;
+        cvs.className = 'rounded border border-slate-800';
+        renderMiniHeatmap(cvs, m, '#fbbf24');
+        const lbl = document.createElement('span'); lbl.className = 'text-[10px] mono text-slate-300 mt-1.5';
+        lbl.textContent = CONV2_FILTERS[idx].name;
+        wrap.appendChild(cvs); wrap.appendChild(lbl); c2Container.appendChild(wrap);
+      });
+
+      const gap = conv2Maps.map(m => m.flat().reduce((a, b) => a + b, 0) / 25);
+      const centerEnergy = pool1Maps[0][3][3] + pool1Maps[1][3][3];
+      const diagEnergy = pool1Maps[2].flat().reduce((a,b)=>a+b,0) + pool1Maps[3].flat().reduce((a,b)=>a+b,0);
+      const orthoEnergy = pool1Maps[0].flat().reduce((a,b)=>a+b,0) + pool1Maps[1].flat().reduce((a,b)=>a+b,0);
+      const totalInput = archGrid.flat().reduce((a,b)=>a+b,0);
+
+      let logits = [0, 0, 0, 0];
+      if (totalInput > 2) {
+        logits = [
+          gap[0] * 1.4 + (diagEnergy / (orthoEnergy + 1)) * 2.2 - centerEnergy * 0.4,
+          gap[1] * 1.5 + (orthoEnergy / (diagEnergy + 1)) * 1.8 - centerEnergy * 0.6,
+          gap[2] * 1.3 + centerEnergy * 1.4 - gap[3] * 0.5,
+          gap[3] * 2.2 + (pool1Maps[2].flat().reduce((a,b)=>a+b,0) / (pool1Maps[3].flat().reduce((a,b)=>a+b,0) + 1)) * 1.5
+        ];
+      }
+
+      const maxLogit = Math.max(...logits);
+      const exps = logits.map(l => Math.exp(l - maxLogit));
+      const sumExp = exps.reduce((a, b) => a + b, 0);
+      const probs = exps.map(e => e / sumExp);
+
+      const probsContainer = document.getElementById('arch-probs-container');
+      probsContainer.innerHTML = '';
+      let bestIdx = 0;
+      probs.forEach((p, idx) => {
+        if (p > probs[bestIdx]) bestIdx = idx;
+        const pct = (p * 100).toFixed(1);
+        const row = document.createElement('div');
+        row.className = 'space-y-1';
+        row.innerHTML = `
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-200 font-medium">${CLASS_LABELS[idx]}</span>
+            <span class="mono ${idx === bestIdx && totalInput > 2 ? 'text-emerald-400 font-semibold' : 'text-slate-400'}">${pct}%</span>
+          </div>
+          <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+            <div class="h-full bg-emerald-400 transition-all duration-150" style="width: ${pct}%"></div>
+          </div>
+        `;
+        probsContainer.appendChild(row);
+      });
+
+      document.getElementById('arch-top-pred').textContent =
+        totalInput > 2 ? `${CLASS_LABELS[bestIdx]} (${(probs[bestIdx] * 100).toFixed(0)}%)` : '請畫一個形狀';
+    }
+
+    const archCanvas = document.getElementById('arch-draw-canvas');
+    function paintArchAt(e) {
+      const rect = archCanvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) * (archCanvas.width / rect.width);
+      const y = (e.clientY - rect.top) * (archCanvas.height / rect.height);
+      const c = Math.floor((x / archCanvas.width) * ARCH_SIZE);
+      const r = Math.floor((y / archCanvas.height) * ARCH_SIZE);
+      if (r >= 0 && r < ARCH_SIZE && c >= 0 && c < ARCH_SIZE) {
+        archGrid[r][c] = 1;
+        renderArchCanvas();
+        runArchForward();
+      }
+    }
+    archCanvas.addEventListener('pointerdown', (e) => { archDrawing = true; paintArchAt(e); });
+    archCanvas.addEventListener('pointermove', (e) => { if (archDrawing) paintArchAt(e); });
+    window.addEventListener('pointerup', () => { archDrawing = false; });
+
+    document.querySelectorAll('.shape-preset-btn').forEach(btn => { btn.addEventListener('click', () => drawArchPreset(btn.dataset.shape)); });
+    document.getElementById('btn-arch-clear').addEventListener('click', () => {
+      for (let r = 0; r < ARCH_SIZE; r++) archGrid[r].fill(0);
+      renderArchCanvas();
+      runArchForward();
+    });
+
+    // =========================================================================
+    // 4. 分頁切換與初始化
+    // =========================================================================
+    const tabs = [
+      { btn: document.getElementById('tab-real'), view: document.getElementById('view-real'), onOpen: () => {} },
+      { btn: document.getElementById('tab-conv'), view: document.getElementById('view-conv'), onOpen: () => renderConvLab() },
+      { btn: document.getElementById('tab-arch'), view: document.getElementById('view-arch'), onOpen: () => { renderArchCanvas(); runArchForward(); } }
+    ];
+
+    tabs.forEach((t, activeIdx) => {
+      t.btn.addEventListener('click', () => {
+        if (activeIdx !== 1) stopPlayback();
+        tabs.forEach((item, i) => {
+          if (i === activeIdx) {
+            item.view.classList.remove('hidden');
+            item.btn.className = 'px-3 py-1.5 text-xs font-medium rounded-md transition-colors bg-sky-500 text-slate-950 shadow-sm whitespace-nowrap';
+          } else {
+            item.view.classList.add('hidden');
+            item.btn.className = 'px-3 py-1.5 text-xs font-medium rounded-md transition-colors text-slate-300 hover:text-white whitespace-nowrap';
+          }
+        });
+        t.onOpen();
+      });
+    });
+
+    window.addEventListener('load', () => {
+      generateRealSample('cat');
+      renderConvLab();
+      drawArchPreset('circle');
+      // 以 KaTeX 排版數學原理面板中的公式
+      if (window.renderMathInElement) {
+        document.querySelectorAll('.math-panel').forEach(el => renderMathInElement(el, {
+          delimiters: [
+            { left: '$$', right: '$$', display: true },
+            { left: '$', right: '$', display: false }
+          ],
+          throwOnError: false
+        }));
+      }
+    });
+  </script>
+</body>
+</html>
